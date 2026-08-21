@@ -4,9 +4,9 @@
   "description": "Backend API for Image Upload System",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc && npx prisma generate",
-    "start": "node dist/server.js",
+    "dev": "node scripts/prepare-db.js && tsx watch src/server.ts",
+    "build": "node scripts/prepare-db.js && tsc && npx prisma generate",
+    "start": "node scripts/prepare-db.js && npx prisma db push --accept-data-loss && node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",

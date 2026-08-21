@@ -4,21 +4,29 @@ import path from 'path';
 import crypto from 'crypto';
 import { env } from '../config/env';
 
-// Configure Cloudinary if keys are valid
-const isCloudinaryConfigured =
-  env.CLOUDINARY_CLOUD_NAME &&
-  env.CLOUDINARY_CLOUD_NAME !== 'demo_cloud' &&
-  env.CLOUDINARY_API_KEY &&
-  env.CLOUDINARY_API_SECRET;
-
-if (isCloudinaryConfigured) {
-  cloudinary.config({
-    cloud_name: env.CLOUDINARY_CLOUD_NAME,
-    api_key: env.CLOUDINARY_API_KEY,
-    api_secret: env.CLOUDINARY_API_SECRET,
-    secure: true,
-  });
+function isCloudinaryConfigured(): boolean {
+  return Boolean(
+    env.CLOUDINARY_CLOUD_NAME &&
+      env.CLOUDINARY_CLOUD_NAME !== 'demo_cloud' &&
+      env.CLOUDINARY_API_KEY &&
+      env.CLOUDINARY_API_SECRET &&
+      env.CLOUDINARY_API_SECRET !== 'your_api_secret_here' &&
+      env.CLOUDINARY_API_SECRET !== 'secret_key_demo'
+  );
 }
+
+function initCloudinary() {
+  if (isCloudinaryConfigured()) {
+    cloudinary.config({
+      cloud_name: env.CLOUDINARY_CLOUD_NAME,
+      api_key: env.CLOUDINARY_API_KEY,
+      api_secret: env.CLOUDINARY_API_SECRET,
+      secure: true,
+    });
+  }
+}
+
+initCloudinary();
 
 // Local storage directory fallback
 const UPLOAD_DIR = path.resolve(__dirname, '../../uploads');
@@ -41,7 +49,7 @@ export async function uploadToStorage(
   const randomId = crypto.randomBytes(16).toString('hex');
   const storageKey = `users/${userId}/images/${randomId}${extension}`;
 
-  if (isCloudinaryConfigured) {
+  if (isCloudinaryConfigured()) {
     return new Promise((resolve, reject) => {
       const publicId = `users/${userId}/images/${randomId}`;
       const uploadStream = cloudinary.uploader.upload_stream(
@@ -81,7 +89,7 @@ export async function uploadToStorage(
 }
 
 export async function deleteFromStorage(storageKey: string): Promise<void> {
-  if (isCloudinaryConfigured && !storageKey.includes(path.sep) && !storageKey.startsWith('/')) {
+  if (isCloudinaryConfigured() && !storageKey.includes(path.sep) && !storageKey.startsWith('/')) {
     try {
       await cloudinary.uploader.destroy(storageKey);
     } catch (err) {
