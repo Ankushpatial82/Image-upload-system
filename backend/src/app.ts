@@ -32,7 +32,7 @@ const limiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests from this IP, please try again after 15 minutes.' },
 });
-app.use('/api', limiter);
+app.use(limiter);
 
 // Body Parsers
 app.use(express.json({ limit: '10mb' }));
@@ -63,11 +63,18 @@ app.get('/', (req: express.Request, res: express.Response) => {
   });
 });
 
-// API Routes
+// API Routes (Mounted under both /api/* and /* for maximum client compatibility)
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
+
 app.use('/api/images', imageRoutes);
+app.use('/images', imageRoutes);
+
 app.use('/api/users', userRoutes);
+app.use('/users', userRoutes);
+
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/dashboard', dashboardRoutes);
 
 // 404 Route Handler
 app.use((req, res) => {
