@@ -18,9 +18,9 @@ function isCloudinaryConfigured(): boolean {
 function initCloudinary() {
   if (isCloudinaryConfigured()) {
     cloudinary.config({
-      cloud_name: env.CLOUDINARY_CLOUD_NAME,
-      api_key: env.CLOUDINARY_API_KEY,
-      api_secret: env.CLOUDINARY_API_SECRET,
+      cloud_name: env.CLOUDINARY_CLOUD_NAME.trim(),
+      api_key: env.CLOUDINARY_API_KEY.trim(),
+      api_secret: env.CLOUDINARY_API_SECRET.trim(),
       secure: true,
     });
   }
@@ -39,6 +39,26 @@ export interface UploadResult {
   storageKey: string;
 }
 
+async function saveToLocalStorage(
+  fileBuffer: Buffer,
+  randomId: string,
+  extension: string,
+  userId: string
+): Promise<UploadResult> {
+  const userDir = path.join(UPLOAD_DIR, userId);
+  if (!fs.existsSync(userDir)) {
+    fs.mkdirSync(userDir, { recursive: true });
+  }
+  const localFilePath = path.join(userDir, `${randomId}${extension}`);
+  await fs.promises.writeFile(localFilePath, fileBuffer);
+
+  const url = `/uploads/${userId}/${randomId}${extension}`;
+  return {
+    url,
+    storageKey: localFilePath,
+  };
+}
+
 export async function uploadToStorage(
   fileBuffer: Buffer,
   originalFilename: string,
@@ -47,56 +67,48 @@ export async function uploadToStorage(
 ): Promise<UploadResult> {
   const extension = path.extname(originalFilename).toLowerCase() || getExtensionFromMime(mimeType);
   const randomId = crypto.randomBytes(16).toString('hex');
-  const storageKey = `users/${userId}/images/${randomId}${extension}`;
 
   if (isCloudinaryConfigured()) {
-    return new Promise((resolve, reject) => {
-      const publicId = `users/${userId}/images/${randomId}`;
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          public_id: publicId,
-          resource_type: 'image',
-          folder: `image_upload_system/users/${userId}`,
-        },
-        (error, result) => {
-          if (error || !result) {
-            return reject(new Error(error?.message || 'Cloudinary upload failed'));
+    try {
+      initCloudinary();
+      return await new Promise<UploadResult>((resolve, reject) => {
+        const publicId = `users/${userId}/images/${randomId}`;
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            public_id: publicId,
+            resource_type: 'image',
+            folder: `image_upload_system/users/${userId}`,
+          },
+          (error, result) => {
+            if (error || !result) {
+              return reject(error || new Error('Cloudinary upload stream returned empty result'));
+            }
+            resolve({
+              url: result.secure_url,
+              storageKey: result.public_id,
+            });
           }
-          resolve({
-            url: result.secure_url,
-            storageKey: result.public_id,
-          });
-        }
-      );
-      uploadStream.end(fileBuffer);
-    });
-  } else {
-    // Local storage fallback for development / testing without live Cloudinary keys
-    const userDir = path.join(UPLOAD_DIR, userId);
-    if (!fs.existsSync(userDir)) {
-      fs.mkdirSync(userDir, { recursive: true });
+        );
+        uploadStream.end(fileBuffer);
+      });
+    } catch (err: any) {
+      console.warn('Cloudinary upload error:', err.message, '- Falling back to resilient local storage...');
+      return await saveToLocalStorage(fileBuffer, randomId, extension, userId);
     }
-    const localFilePath = path.join(userDir, `${randomId}${extension}`);
-    await fs.promises.writeFile(localFilePath, fileBuffer);
-
-    // Servable URL relative to backend
-    const url = `/uploads/${userId}/${randomId}${extension}`;
-    return {
-      url,
-      storageKey: localFilePath,
-    };
+  } else {
+    return await saveToLocalStorage(fileBuffer, randomId, extension, userId);
   }
 }
 
 export async function deleteFromStorage(storageKey: string): Promise<void> {
   if (isCloudinaryConfigured() && !storageKey.includes(path.sep) && !storageKey.startsWith('/')) {
     try {
+      initCloudinary();
       await cloudinary.uploader.destroy(storageKey);
     } catch (err) {
       console.error('Failed to delete image from Cloudinary:', err);
     }
   } else {
-    // Delete local file fallback
     try {
       if (fs.existsSync(storageKey)) {
         await fs.promises.unlink(storageKey);
