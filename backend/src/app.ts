@@ -53,6 +53,16 @@ const healthHandler = (req: express.Request, res: express.Response) => {
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
+// Root Landing Endpoint
+app.get('/', (req: express.Request, res: express.Response) => {
+  res.status(200).json({
+    success: true,
+    message: 'Welcome to CloudSnap Image Upload System API Backend',
+    health: '/health',
+    version: '1.0.0',
+  });
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/images', imageRoutes);
